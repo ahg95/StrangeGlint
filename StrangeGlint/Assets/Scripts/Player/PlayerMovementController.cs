@@ -7,8 +7,12 @@ public class PlayerMovementController : MonoBehaviour
         private set { _topSpeed = value; }
     }
 
+    [Header("General")]
     [SerializeField, Range(1f, 10f)]
     float _topSpeed;
+
+    [SerializeField]
+    LayerMask _groundLayer;
 
     [Header("Acceleration")]
     [SerializeField, Range(0.1f, 1f), Tooltip("The time it takes the player from completely standing still to reaching top speed.")]
@@ -372,6 +376,14 @@ public class PlayerMovementController : MonoBehaviour
         _rigidbody.velocity += velocityChange;
 
         Debug.DrawRay(transform.position, velocityChange, Color.red, 0f, false);
+
+
+
+        // Position the player on top of the ground.
+        if (Physics.Raycast(transform.position, Vector3.down, out var hit, Mathf.Infinity, _groundLayer))
+        {
+            transform.position = hit.point + Vector3.up * _collider.height / 2 - _collider.center;
+        }
     }
 
 

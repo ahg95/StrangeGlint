@@ -38,7 +38,7 @@ public class CameraController : MonoBehaviour
 
     float _zoomAlpha = 1;
 
-    float _zoomTargetAlpha;
+    float _zoomTargetAlpha = 1;
 
     float _zoomAlphaSpeed;
 
