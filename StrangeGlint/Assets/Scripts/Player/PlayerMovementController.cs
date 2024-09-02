@@ -2,6 +2,11 @@ using UnityEngine;
 
 public class PlayerMovementController : MonoBehaviour
 {
+    public float TopSpeed {
+        get { return _topSpeed; }
+        private set { _topSpeed = value; }
+    }
+
     [SerializeField, Range(1f, 10f)]
     float _topSpeed;
 
@@ -19,12 +24,17 @@ public class PlayerMovementController : MonoBehaviour
     [SerializeField, Tooltip("The curve that the player's speed follows when decelerating.")]
     EasingFunction _decelerationProfile;
 
+    [Header("Obstacle Avoidance")]
+    [SerializeField, Range(0, 90), Tooltip("If the player directs the character towards a wall at a greater angle than this, the player will move perpendicular to the wall.")]
+    float _avoidanceAngleThreshold;
 
     Vector3 _mainDir = Vector3.forward;
 
     PlayerInput _playerInput;
 
     Rigidbody _rigidbody;
+
+    CapsuleCollider _collider;
 
 
     // The following functions define the acceleration and deceleration of the player.
@@ -171,6 +181,7 @@ public class PlayerMovementController : MonoBehaviour
     {
         _playerInput = new();
         _rigidbody = GetComponent<Rigidbody>();
+        _collider = GetComponent<CapsuleCollider>();
     }
 
     private void OnEnable()
@@ -189,10 +200,38 @@ public class PlayerMovementController : MonoBehaviour
         var currVelFlattened = _rigidbody.velocity;
         currVelFlattened.y = 0;
 
-        // Update the main direction. If the input is a 0 vector, then keep the previous main direction.
+
+
+        // Update the main direction.
+        // - Construct the main direction from the player input. If the input is a 0 vector, then keep the previous main direction.
         var movementInput = _playerInput.Player.Move.ReadValue<Vector2>();
         var input = new Vector3(movementInput.x, 0, movementInput.y);
         _mainDir = input == Vector3.zero ? _mainDir : input.normalized;
+
+        // - Check if the player would run against an obstacle.
+        var point1 = _collider.center + transform.position + Vector3.up * _collider.height / 2;
+        var point2 = _collider.center + transform.position + Vector3.down * _collider.height / 2;
+
+        if (Physics.CapsuleCast(point1, point2, _collider.radius * 0.99f, _mainDir, out var raycastHit, _topSpeed * Time.fixedDeltaTime))
+        {
+            // - Check if the angle to that obstacle would exceed the avoidance angle threshold.
+            var normalInverted = -raycastHit.normal;
+
+            var angleToWall = Vector3.SignedAngle(_mainDir, normalInverted, Vector3.up);
+
+            if (Mathf.Abs(angleToWall) > _avoidanceAngleThreshold)
+            {
+                // Adjust the main direction so the player walks around the obstacle.
+                var normalInverted2D = new Vector2(normalInverted.x, normalInverted.z);
+
+                var perpDirToWall2D = Vector2.Perpendicular(normalInverted2D);
+
+                var perpDirToWall = new Vector3(perpDirToWall2D.x, 0, perpDirToWall2D.y).normalized;
+
+                _mainDir = Mathf.Sign(angleToWall) * perpDirToWall;
+            }
+        }
+
 
 
         // Adjust the player's velocity within the main direction
@@ -334,6 +373,7 @@ public class PlayerMovementController : MonoBehaviour
 
         Debug.DrawRay(transform.position, velocityChange, Color.red, 0f, false);
     }
+
 
 
     // The following functions perform necessary transformations on the easing functions. These include:
