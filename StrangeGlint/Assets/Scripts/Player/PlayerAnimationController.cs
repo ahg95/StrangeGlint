@@ -57,7 +57,5 @@ public class PlayerAnimationController : MonoBehaviour
         var sidewaysSpeed = currVelFlattened.magnitude * Mathf.Cos(Vector3.Angle(transform.right, currVelFlattened) * Mathf.Deg2Rad);
 
         _animatorController.SetFloat("SidewaysSpeed", sidewaysSpeed / _movementController.TopSpeed);
-
-
     }
 }
