@@ -1,7 +1,17 @@
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 public class CameraController : MonoBehaviour
 {
+    [Header("References")]
+    [SerializeField]
+    GraphicRaycaster _raycaster;
+
+    [SerializeField]
+    EventSystem _eventSystem;
+
     [Header("Camera Angle")]
     [SerializeField]
     EasingFunction _angleProfile;
@@ -79,6 +89,20 @@ public class CameraController : MonoBehaviour
         _playerInput.Camera.Enable();
         _playerInput.Camera.Zoom.performed += (context) =>
         {
+            // Check if the mouse is over a UI element.
+
+            var eventData = new PointerEventData(_eventSystem);
+
+            eventData.position = Input.mousePosition;
+
+            var results = new List<RaycastResult>();
+
+            _raycaster.Raycast(eventData, results);
+
+            if (results.Count > 0)
+                return;
+
+
             // Retrieve input.
             var y = context.ReadValue<float>();
 
