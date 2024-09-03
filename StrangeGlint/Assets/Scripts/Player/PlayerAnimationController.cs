@@ -10,8 +10,7 @@ public class PlayerAnimationController : MonoBehaviour
     PlayerMovementController _movementController;
 
     [Header("Properties")]
-    [SerializeField, Range(0.01f, 1)]
-    float _turningTime;
+    public float _TurningSpeed;
 
     [SerializeField]
     float _runningAnimationSpeed;
@@ -23,14 +22,16 @@ public class PlayerAnimationController : MonoBehaviour
     private void Awake()
     {
         _animatorController = GetComponent<Animator>();
-
-        // Change the animator's animation speed based on the movement controller's top speed.
-        // This prevents foot slipping when the top speed is changed.
-        _animatorController.speed = _movementController.TopSpeed / _runningAnimationSpeed;
     }
 
     void Update()
     {
+        // Change the animator's animation speed based on the movement controller's top speed.
+        // This prevents foot slipping when the top speed is changed.
+        _animatorController.speed = _movementController._TopSpeed / _runningAnimationSpeed;
+
+
+
         // Rotate the player model towards the movement direction.
         var currentAngle = transform.eulerAngles.y;
 
@@ -41,21 +42,24 @@ public class PlayerAnimationController : MonoBehaviour
         {
             var targetAngle = Vector3.SignedAngle(Vector3.back, currVelFlattened, Vector3.up) + 180;
 
-            var nextAngle = Mathf.SmoothDampAngle(currentAngle, targetAngle, ref _angularVelocity, _turningTime);
+            var nextAngle = Mathf.SmoothDampAngle(currentAngle, targetAngle, ref _angularVelocity, 1 / _TurningSpeed);
 
             transform.eulerAngles = new Vector3(0, nextAngle, 0);
         }
+
+
 
         // Set the animation parameters.
         // - Calculate the movement speed in the forward direction.
         var forwardSpeed = currVelFlattened.magnitude * Mathf.Cos(Vector3.Angle(transform.forward, currVelFlattened) * Mathf.Deg2Rad);
 
-        _animatorController.SetFloat("ForwardSpeed", forwardSpeed / _movementController.TopSpeed);
+        _animatorController.SetFloat("ForwardSpeed", forwardSpeed / _movementController._TopSpeed);
+
 
 
         // - Calculate the movement speed in the right direction.
         var sidewaysSpeed = currVelFlattened.magnitude * Mathf.Cos(Vector3.Angle(transform.right, currVelFlattened) * Mathf.Deg2Rad);
 
-        _animatorController.SetFloat("SidewaysSpeed", sidewaysSpeed / _movementController.TopSpeed);
+        _animatorController.SetFloat("SidewaysSpeed", sidewaysSpeed / _movementController._TopSpeed);
     }
 }

@@ -6,31 +6,45 @@ public class CameraController : MonoBehaviour
     [SerializeField]
     EasingFunction _angleProfile;
 
-    [SerializeField]
-    float _minAngle;
+    public EasingFunction AngleProfile
+    {
+        get { return _angleProfile; }
+        set
+        {
+            _angleProfile = value;
+            UpdateAngleCurve();
+        }
+    }
 
-    [SerializeField]
-    float _maxAngle;
+    public float _MinAngle;
+
+    public float _MaxAngle;
 
     [Header("Camera Distance")]
     [SerializeField]
     EasingFunction _distanceProfile;
 
-    [SerializeField]
-    float _minDistance;
+    public EasingFunction DistanceProfile
+    {
+        get { return _distanceProfile; }
+        set
+        {
+            _distanceProfile = value;
+            UpdateDistanceCurve();
+        }
+    }
 
-    [SerializeField]
-    float _maxDistance;
+    public float _MinDistance;
+
+    public float _MaxDistance;
 
     [Header("General")]
     [SerializeField]
     Transform _focalPoint;
 
-    [SerializeField]
-    int _zoomSteps;
+    public int _NrOfZoomLevels;
 
-    [SerializeField]
-    float _zoomSpeed;
+    public float _ZoomSpeed;
 
 
 
@@ -53,6 +67,53 @@ public class CameraController : MonoBehaviour
 
 
     private void OnValidate()
+    {
+        UpdateAngleCurve();
+        UpdateDistanceCurve();
+    }
+
+
+    private void Awake()
+    {
+        _playerInput = new PlayerInput();
+        _playerInput.Camera.Enable();
+        _playerInput.Camera.Zoom.performed += (context) =>
+        {
+            // Retrieve input.
+            var y = context.ReadValue<float>();
+
+            y = - Mathf.Sign(y);
+
+            // Set target alpha.
+            _zoomTargetAlpha = Mathf.Clamp(_zoomTargetAlpha + y / (_NrOfZoomLevels - 1), 0, 1);
+        };
+    }
+
+    private void OnEnable()
+    {
+        _playerInput.Camera.Enable();
+    }
+
+    private void OnDisable()
+    {
+        _playerInput.Camera.Disable();
+    }
+
+    void LateUpdate()
+    {
+        // Move the zoom alpha value smoothly towards the target value.
+        _zoomAlpha = Mathf.SmoothDamp(_zoomAlpha, _zoomTargetAlpha, ref _zoomAlphaSpeed, 1.0f / _ZoomSpeed);
+
+        // Set the rotation of the camera according to the zoom alpha value and the angle profile curve.
+        var angle = AngleCurve(_zoomAlpha);
+        transform.rotation = Quaternion.Euler(angle, 0, 0);
+
+        // Set the distance of the camera to the focal point according to the zoom alpha value and the distance profile curve.
+        var distance = DistanceCurve(_zoomAlpha);
+        transform.position = _focalPoint.position - distance * transform.forward;
+    }
+
+    void UpdateAngleCurve()
     {
         switch (_angleProfile)
         {
@@ -99,7 +160,10 @@ public class CameraController : MonoBehaviour
                 _angleCurve = EasingFunctions.EaseOutExpo;
                 break;
         }
+    }
 
+    void UpdateDistanceCurve()
+    {
         switch (_distanceProfile)
         {
             case EasingFunction.EaseInSine:
@@ -147,54 +211,13 @@ public class CameraController : MonoBehaviour
         }
     }
 
-
-    private void Awake()
-    {
-        _playerInput = new PlayerInput();
-        _playerInput.Camera.Enable();
-        _playerInput.Camera.Zoom.performed += (context) =>
-        {
-            // Retrieve input.
-            var y = context.ReadValue<float>();
-
-            y = - Mathf.Sign(y);
-
-            // Set target alpha.
-            _zoomTargetAlpha = Mathf.Clamp(_zoomTargetAlpha + y / _zoomSteps, 0, 1);
-        };
-    }
-
-    private void OnEnable()
-    {
-        _playerInput.Camera.Enable();
-    }
-
-    private void OnDisable()
-    {
-        _playerInput.Camera.Disable();
-    }
-
-    void LateUpdate()
-    {
-        // Move the zoom alpha value smoothly towards the target value.
-        _zoomAlpha = Mathf.SmoothDamp(_zoomAlpha, _zoomTargetAlpha, ref _zoomAlphaSpeed, 1.0f / _zoomSpeed);
-
-        // Set the rotation of the camera according to the zoom alpha value and the angle profile curve.
-        var angle = AngleCurve(_zoomAlpha);
-        transform.rotation = Quaternion.Euler(angle, 0, 0);
-
-        // Set the distance of the camera to the focal point according to the zoom alpha value and the distance profile curve.
-        var distance = DistanceCurve(_zoomAlpha);
-        transform.position = _focalPoint.position - distance * transform.forward;
-    }
-
     float AngleCurve(float alpha)
     {
-        return (_maxAngle - _minAngle) * _angleCurve(alpha) + _minAngle;
+        return (_MaxAngle - _MinAngle) * _angleCurve(alpha) + _MinAngle;
     }
 
     float DistanceCurve(float alpha)
     {
-        return (_maxDistance - _minDistance) * _distanceCurve(alpha) + _minDistance;
+        return (_MaxDistance - _MinDistance) * _distanceCurve(alpha) + _MinDistance;
     }
 }

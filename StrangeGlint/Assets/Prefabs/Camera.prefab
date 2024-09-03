@@ -105,12 +105,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b11959c811ec38047b2414bbd52768a8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _angleProfile: 0
-  _minAngle: 30
-  _maxAngle: 70
-  _distanceProfile: 0
-  _minDistance: 5
-  _maxDistance: 10
+  _angleProfile: 9
+  _MinAngle: 30
+  _MaxAngle: 60
+  _distanceProfile: 8
+  _MinDistance: 3
+  _MaxDistance: 11
   _focalPoint: {fileID: 0}
-  _zoomSteps: 10
-  _zoomSpeed: 5
+  _NrOfZoomLevels: 7
+  _ZoomSpeed: 5

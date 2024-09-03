@@ -2,35 +2,53 @@ using UnityEngine;
 
 public class PlayerMovementController : MonoBehaviour
 {
-    public float TopSpeed {
-        get { return _topSpeed; }
-        private set { _topSpeed = value; }
-    }
 
     [Header("General")]
-    [SerializeField, Range(1f, 10f)]
-    float _topSpeed;
+    public float _TopSpeed;
 
     [SerializeField]
     LayerMask _groundLayer;
 
     [Header("Acceleration")]
-    [SerializeField, Range(0.1f, 1f), Tooltip("The time it takes the player from completely standing still to reaching top speed.")]
-    float _accelerationDuration;
+    [Tooltip("The time it takes the player from completely standing still to reaching top speed.")]
+    public float _AccelerationDuration;
 
     [SerializeField, Tooltip("The curve that the player's speed follows when accelerating.")]
     EasingFunction _accelerationProfile;
 
+    public EasingFunction AccelerationProfile
+    {
+        get { return _accelerationProfile; }
+        set
+        {
+            _accelerationProfile = value;
+            UpdateAccelerationCurve();
+        }
+    }
+
     [Header("Deceleration")]
-    [SerializeField, Range(0.1f, 1f), Tooltip("The time it takes the player from moving at top speed to completely standing still.")]
-    float _decelerationDuration;
+    [Tooltip("The time it takes the player from moving at top speed to completely standing still.")]
+    public float _DecelerationDuration;
 
     [SerializeField, Tooltip("The curve that the player's speed follows when decelerating.")]
     EasingFunction _decelerationProfile;
 
+    public EasingFunction DecelerationProfile
+    {
+        get { return _decelerationProfile; }
+        set
+        {
+            _decelerationProfile = value;
+            UpdateDecelerationCurve();
+        }
+    }
+
     [Header("Obstacle Avoidance")]
-    [SerializeField, Range(0, 90), Tooltip("If the player directs the character towards a wall at a greater angle than this, the player will move perpendicular to the wall.")]
-    float _avoidanceAngleThreshold;
+    [Tooltip("Enables obstacle avoidance.")]
+    public bool _ObstacleAvoidanceEnabled;
+    
+    [Range(0, 90), Tooltip("If the player directs the character towards a wall at a greater angle than this, the player will move perpendicular to the wall.")]
+    public float _AvoidanceAngleThreshold;
 
     Vector3 _mainDir = Vector3.forward;
 
@@ -57,127 +75,11 @@ public class PlayerMovementController : MonoBehaviour
     [SerializeField, HideInInspector]
     Function _decCurveInv;
 
+
     private void OnValidate()
     {
-        switch(_accelerationProfile)
-        {
-            case EasingFunction.EaseInSine:
-                _accCurve = EasingFunctions.EaseInSine;
-                _accCurveInv = EasingFunctions.InverseEaseInSine;
-                break;
-            case EasingFunction.EaseOutSine:
-                _accCurve = EasingFunctions.EaseOutSine;
-                _accCurveInv = EasingFunctions.InverseEaseOutSine;
-                break;
-            case EasingFunction.EaseInCubic:
-                _accCurve = EasingFunctions.EaseInCubic;
-                _accCurveInv = EasingFunctions.InverseEaseInCubic;
-                break;
-            case EasingFunction.EaseOutCubic:
-                _accCurve = EasingFunctions.EaseOutCubic;
-                _accCurveInv = EasingFunctions.InverseEaseOutCubic;
-                break;
-            case EasingFunction.EaseInQuint:
-                _accCurve = EasingFunctions.EaseInQuint;
-                _accCurveInv = EasingFunctions.InverseEaseInQuint;
-                break;
-            case EasingFunction.EaseOutQuint:
-                _accCurve = EasingFunctions.EaseOutQuint;
-                _accCurveInv = EasingFunctions.InverseEaseOutQuint;
-                break;
-            case EasingFunction.EaseInCirc:
-                _accCurve = EasingFunctions.EaseInCirc;
-                _accCurveInv = EasingFunctions.InverseEaseInCirc;
-                break;
-            case EasingFunction.EaseOutCirc:
-                _accCurve = EasingFunctions.EaseOutCirc;
-                _accCurveInv = EasingFunctions.InverseEaseOutCirc;
-                break;
-            case EasingFunction.EaseInQuad:
-                _accCurve = EasingFunctions.EaseInQuad;
-                _accCurveInv = EasingFunctions.InverseEaseInQuad;
-                break;
-            case EasingFunction.EaseOutQuad:
-                _accCurve = EasingFunctions.EaseOutQuad;
-                _accCurveInv = EasingFunctions.InverseEaseOutQuad;
-                break;
-            case EasingFunction.EaseInQuart:
-                _accCurve = EasingFunctions.EaseInQuart;
-                _accCurveInv = EasingFunctions.InverseEaseInQuart;
-                break;
-            case EasingFunction.EaseOutQuart:
-                _accCurve = EasingFunctions.EaseOutQuart;
-                _accCurveInv = EasingFunctions.InverseEaseOutQuart;
-                break;
-            case EasingFunction.EaseInExpo:
-                _accCurve = EasingFunctions.EaseInExpo;
-                _accCurveInv = EasingFunctions.InverseEaseInExpo;
-                break;
-            case EasingFunction.EaseOutExpo:
-                _accCurve = EasingFunctions.EaseOutExpo;
-                _accCurveInv = EasingFunctions.InverseEaseOutExpo;
-                break;
-        }
-
-        switch(_decelerationProfile)
-        {
-            case EasingFunction.EaseInSine:
-                _decCurve = EasingFunctions.EaseInSine;
-                _decCurveInv = EasingFunctions.InverseEaseInSine;
-                break;
-            case EasingFunction.EaseOutSine:
-                _decCurve = EasingFunctions.EaseOutSine;
-                _decCurveInv = EasingFunctions.InverseEaseOutSine;
-                break;
-            case EasingFunction.EaseInCubic:
-                _decCurve = EasingFunctions.EaseInCubic;
-                _decCurveInv = EasingFunctions.InverseEaseInCubic;
-                break;
-            case EasingFunction.EaseOutCubic:
-                _decCurve = EasingFunctions.EaseOutCubic;
-                _decCurveInv = EasingFunctions.InverseEaseOutCubic;
-                break;
-            case EasingFunction.EaseInQuint:
-                _decCurve = EasingFunctions.EaseInQuint;
-                _decCurveInv = EasingFunctions.InverseEaseInQuint;
-                break;
-            case EasingFunction.EaseOutQuint:
-                _decCurve = EasingFunctions.EaseOutQuint;
-                _decCurveInv = EasingFunctions.InverseEaseOutQuint;
-                break;
-            case EasingFunction.EaseInCirc:
-                _decCurve = EasingFunctions.EaseInCirc;
-                _decCurveInv = EasingFunctions.InverseEaseInCirc;
-                break;
-            case EasingFunction.EaseOutCirc:
-                _decCurve = EasingFunctions.EaseOutCirc;
-                _decCurveInv = EasingFunctions.InverseEaseOutCirc;
-                break;
-            case EasingFunction.EaseInQuad:
-                _decCurve = EasingFunctions.EaseInQuad;
-                _decCurveInv = EasingFunctions.InverseEaseInQuad;
-                break;
-            case EasingFunction.EaseOutQuad:
-                _decCurve = EasingFunctions.EaseOutQuad;
-                _decCurveInv = EasingFunctions.InverseEaseOutQuad;
-                break;
-            case EasingFunction.EaseInQuart:
-                _decCurve = EasingFunctions.EaseInQuart;
-                _decCurveInv = EasingFunctions.InverseEaseInQuart;
-                break;
-            case EasingFunction.EaseOutQuart:
-                _decCurve = EasingFunctions.EaseOutQuart;
-                _decCurveInv = EasingFunctions.InverseEaseOutQuart;
-                break;
-            case EasingFunction.EaseInExpo:
-                _decCurve = EasingFunctions.EaseInExpo;
-                _decCurveInv = EasingFunctions.InverseEaseInExpo;
-                break;
-            case EasingFunction.EaseOutExpo:
-                _decCurve = EasingFunctions.EaseOutExpo;
-                _decCurveInv = EasingFunctions.InverseEaseOutExpo;
-                break;
-        }
+        UpdateAccelerationCurve();
+        UpdateDecelerationCurve();
     }
 
 
@@ -213,26 +115,29 @@ public class PlayerMovementController : MonoBehaviour
         _mainDir = input == Vector3.zero ? _mainDir : input.normalized;
 
         // - Check if the player would run against an obstacle.
-        var point1 = _collider.center + transform.position + Vector3.up * _collider.height / 2;
-        var point2 = _collider.center + transform.position + Vector3.down * _collider.height / 2;
-
-        if (Physics.CapsuleCast(point1, point2, _collider.radius * 0.99f, _mainDir, out var raycastHit, _topSpeed * Time.fixedDeltaTime))
+        if (_ObstacleAvoidanceEnabled)
         {
-            // - Check if the angle to that obstacle would exceed the avoidance angle threshold.
-            var normalInverted = -raycastHit.normal;
+            var point1 = _collider.center + transform.position + Vector3.up * _collider.height / 2;
+            var point2 = _collider.center + transform.position + Vector3.down * _collider.height / 2;
 
-            var angleToWall = Vector3.SignedAngle(_mainDir, normalInverted, Vector3.up);
-
-            if (Mathf.Abs(angleToWall) > _avoidanceAngleThreshold)
+            if (Physics.CapsuleCast(point1, point2, _collider.radius * 0.99f, _mainDir, out var raycastHit, _TopSpeed * Time.fixedDeltaTime))
             {
-                // Adjust the main direction so the player walks around the obstacle.
-                var normalInverted2D = new Vector2(normalInverted.x, normalInverted.z);
+                // - Check if the angle to that obstacle would exceed the avoidance angle threshold.
+                var normalInverted = -raycastHit.normal;
 
-                var perpDirToWall2D = Vector2.Perpendicular(normalInverted2D);
+                var angleToWall = Vector3.SignedAngle(_mainDir, normalInverted, Vector3.up);
 
-                var perpDirToWall = new Vector3(perpDirToWall2D.x, 0, perpDirToWall2D.y).normalized;
+                if (Mathf.Abs(angleToWall) > _AvoidanceAngleThreshold)
+                {
+                    // Adjust the main direction so the player walks around the obstacle.
+                    var normalInverted2D = new Vector2(normalInverted.x, normalInverted.z);
 
-                _mainDir = Mathf.Sign(angleToWall) * perpDirToWall;
+                    var perpDirToWall2D = Vector2.Perpendicular(normalInverted2D);
+
+                    var perpDirToWall = new Vector3(perpDirToWall2D.x, 0, perpDirToWall2D.y).normalized;
+
+                    _mainDir = Mathf.Sign(angleToWall) * perpDirToWall;
+                }
             }
         }
 
@@ -244,7 +149,7 @@ public class PlayerMovementController : MonoBehaviour
         var mainDirSpeed = currVelFlattened.magnitude * Mathf.Cos(Vector3.Angle(_mainDir, currVelFlattened) * Mathf.Deg2Rad);
 
         // - Calculate the speed with which the player should be moving into the main direction.
-        var mainDirTargetSpeed = input.magnitude * _topSpeed;
+        var mainDirTargetSpeed = input.magnitude * _TopSpeed;
 
         // - Check if the player is moving towards the main direction, but below target speed.
         if (mainDirSpeed >= 0 && mainDirSpeed < mainDirTargetSpeed)
@@ -387,6 +292,135 @@ public class PlayerMovementController : MonoBehaviour
     }
 
 
+    void UpdateAccelerationCurve()
+    {
+        switch (_accelerationProfile)
+        {
+            case EasingFunction.EaseInSine:
+                _accCurve = EasingFunctions.EaseInSine;
+                _accCurveInv = EasingFunctions.InverseEaseInSine;
+                break;
+            case EasingFunction.EaseOutSine:
+                _accCurve = EasingFunctions.EaseOutSine;
+                _accCurveInv = EasingFunctions.InverseEaseOutSine;
+                break;
+            case EasingFunction.EaseInCubic:
+                _accCurve = EasingFunctions.EaseInCubic;
+                _accCurveInv = EasingFunctions.InverseEaseInCubic;
+                break;
+            case EasingFunction.EaseOutCubic:
+                _accCurve = EasingFunctions.EaseOutCubic;
+                _accCurveInv = EasingFunctions.InverseEaseOutCubic;
+                break;
+            case EasingFunction.EaseInQuint:
+                _accCurve = EasingFunctions.EaseInQuint;
+                _accCurveInv = EasingFunctions.InverseEaseInQuint;
+                break;
+            case EasingFunction.EaseOutQuint:
+                _accCurve = EasingFunctions.EaseOutQuint;
+                _accCurveInv = EasingFunctions.InverseEaseOutQuint;
+                break;
+            case EasingFunction.EaseInCirc:
+                _accCurve = EasingFunctions.EaseInCirc;
+                _accCurveInv = EasingFunctions.InverseEaseInCirc;
+                break;
+            case EasingFunction.EaseOutCirc:
+                _accCurve = EasingFunctions.EaseOutCirc;
+                _accCurveInv = EasingFunctions.InverseEaseOutCirc;
+                break;
+            case EasingFunction.EaseInQuad:
+                _accCurve = EasingFunctions.EaseInQuad;
+                _accCurveInv = EasingFunctions.InverseEaseInQuad;
+                break;
+            case EasingFunction.EaseOutQuad:
+                _accCurve = EasingFunctions.EaseOutQuad;
+                _accCurveInv = EasingFunctions.InverseEaseOutQuad;
+                break;
+            case EasingFunction.EaseInQuart:
+                _accCurve = EasingFunctions.EaseInQuart;
+                _accCurveInv = EasingFunctions.InverseEaseInQuart;
+                break;
+            case EasingFunction.EaseOutQuart:
+                _accCurve = EasingFunctions.EaseOutQuart;
+                _accCurveInv = EasingFunctions.InverseEaseOutQuart;
+                break;
+            case EasingFunction.EaseInExpo:
+                _accCurve = EasingFunctions.EaseInExpo;
+                _accCurveInv = EasingFunctions.InverseEaseInExpo;
+                break;
+            case EasingFunction.EaseOutExpo:
+                _accCurve = EasingFunctions.EaseOutExpo;
+                _accCurveInv = EasingFunctions.InverseEaseOutExpo;
+                break;
+        }
+    }
+
+    
+
+    void UpdateDecelerationCurve()
+    {
+        switch (_decelerationProfile)
+        {
+            case EasingFunction.EaseInSine:
+                _decCurve = EasingFunctions.EaseInSine;
+                _decCurveInv = EasingFunctions.InverseEaseInSine;
+                break;
+            case EasingFunction.EaseOutSine:
+                _decCurve = EasingFunctions.EaseOutSine;
+                _decCurveInv = EasingFunctions.InverseEaseOutSine;
+                break;
+            case EasingFunction.EaseInCubic:
+                _decCurve = EasingFunctions.EaseInCubic;
+                _decCurveInv = EasingFunctions.InverseEaseInCubic;
+                break;
+            case EasingFunction.EaseOutCubic:
+                _decCurve = EasingFunctions.EaseOutCubic;
+                _decCurveInv = EasingFunctions.InverseEaseOutCubic;
+                break;
+            case EasingFunction.EaseInQuint:
+                _decCurve = EasingFunctions.EaseInQuint;
+                _decCurveInv = EasingFunctions.InverseEaseInQuint;
+                break;
+            case EasingFunction.EaseOutQuint:
+                _decCurve = EasingFunctions.EaseOutQuint;
+                _decCurveInv = EasingFunctions.InverseEaseOutQuint;
+                break;
+            case EasingFunction.EaseInCirc:
+                _decCurve = EasingFunctions.EaseInCirc;
+                _decCurveInv = EasingFunctions.InverseEaseInCirc;
+                break;
+            case EasingFunction.EaseOutCirc:
+                _decCurve = EasingFunctions.EaseOutCirc;
+                _decCurveInv = EasingFunctions.InverseEaseOutCirc;
+                break;
+            case EasingFunction.EaseInQuad:
+                _decCurve = EasingFunctions.EaseInQuad;
+                _decCurveInv = EasingFunctions.InverseEaseInQuad;
+                break;
+            case EasingFunction.EaseOutQuad:
+                _decCurve = EasingFunctions.EaseOutQuad;
+                _decCurveInv = EasingFunctions.InverseEaseOutQuad;
+                break;
+            case EasingFunction.EaseInQuart:
+                _decCurve = EasingFunctions.EaseInQuart;
+                _decCurveInv = EasingFunctions.InverseEaseInQuart;
+                break;
+            case EasingFunction.EaseOutQuart:
+                _decCurve = EasingFunctions.EaseOutQuart;
+                _decCurveInv = EasingFunctions.InverseEaseOutQuart;
+                break;
+            case EasingFunction.EaseInExpo:
+                _decCurve = EasingFunctions.EaseInExpo;
+                _decCurveInv = EasingFunctions.InverseEaseInExpo;
+                break;
+            case EasingFunction.EaseOutExpo:
+                _decCurve = EasingFunctions.EaseOutExpo;
+                _decCurveInv = EasingFunctions.InverseEaseOutExpo;
+                break;
+        }
+    }
+
+
 
     // The following functions perform necessary transformations on the easing functions. These include:
     // - Scaling the functions on the y axis by max Speed
@@ -398,10 +432,10 @@ public class PlayerMovementController : MonoBehaviour
         if (x <= 0)
             return 0;
 
-        if (x >= _accelerationDuration)
-            return _topSpeed;
+        if (x >= _AccelerationDuration)
+            return _TopSpeed;
 
-        return _topSpeed * _accCurve(x / _accelerationDuration);
+        return _TopSpeed * _accCurve(x / _AccelerationDuration);
     }
 
     float AccelerationCurveInverse(float x)
@@ -409,10 +443,10 @@ public class PlayerMovementController : MonoBehaviour
         if (x <= 0)
             return 0;
 
-        if (x >= _topSpeed)
-            return _accelerationDuration;
+        if (x >= _TopSpeed)
+            return _AccelerationDuration;
 
-        return _accelerationDuration * _accCurveInv(x / _topSpeed);
+        return _AccelerationDuration * _accCurveInv(x / _TopSpeed);
     }
 
     float DecelerationCurve(float x)
@@ -420,10 +454,10 @@ public class PlayerMovementController : MonoBehaviour
         if (x <= 0)
             return 0;
 
-        if (x >= _decelerationDuration)
-            return _topSpeed;
+        if (x >= _DecelerationDuration)
+            return _TopSpeed;
 
-        return _topSpeed * _decCurve(x / _decelerationDuration);
+        return _TopSpeed * _decCurve(x / _DecelerationDuration);
     }
 
     float DecelerationCurveInverse(float x)
@@ -431,9 +465,9 @@ public class PlayerMovementController : MonoBehaviour
         if (x <= 0)
             return 0;
 
-        if (x >= _topSpeed)
-            return _decelerationDuration;
+        if (x >= _TopSpeed)
+            return _DecelerationDuration;
 
-        return _decelerationDuration * _decCurveInv(x / _topSpeed);
+        return _DecelerationDuration * _decCurveInv(x / _TopSpeed);
     }
 }
