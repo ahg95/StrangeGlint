@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 4983606533645432982}
   m_Layer: 0
   m_Name: Camera
-  m_TagString: Untagged
+  m_TagString: MainCamera
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -110,7 +110,7 @@ MonoBehaviour:
   _MaxAngle: 60
   _distanceProfile: 8
   _MinDistance: 3
-  _MaxDistance: 11
+  _MaxDistance: 12
   _focalPoint: {fileID: 0}
   _NrOfZoomLevels: 7
   _ZoomSpeed: 5

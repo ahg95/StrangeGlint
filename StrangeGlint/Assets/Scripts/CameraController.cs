@@ -87,6 +87,9 @@ public class CameraController : MonoBehaviour
             // Set target alpha.
             _zoomTargetAlpha = Mathf.Clamp(_zoomTargetAlpha + y / (_NrOfZoomLevels - 1), 0, 1);
         };
+
+        UpdateAngleCurve();
+        UpdateDistanceCurve();
     }
 
     private void OnEnable()

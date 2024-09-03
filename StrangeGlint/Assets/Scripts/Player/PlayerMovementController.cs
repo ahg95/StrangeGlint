@@ -88,6 +88,9 @@ public class PlayerMovementController : MonoBehaviour
         _playerInput = new();
         _rigidbody = GetComponent<Rigidbody>();
         _collider = GetComponent<CapsuleCollider>();
+
+        UpdateAccelerationCurve();
+        UpdateDecelerationCurve();
     }
 
     private void OnEnable()
