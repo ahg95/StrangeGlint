@@ -9,6 +9,9 @@ public class PlayerMovementController : MonoBehaviour
     [SerializeField]
     LayerMask _groundLayer;
 
+    [SerializeField]
+    LayerMask _obstaclesLayer;
+
     [Header("Acceleration")]
     [Tooltip("The time it takes the player from completely standing still to reaching top speed.")]
     public float _AccelerationDuration;
@@ -123,7 +126,7 @@ public class PlayerMovementController : MonoBehaviour
             var point1 = _collider.center + transform.position + Vector3.up * _collider.height / 2;
             var point2 = _collider.center + transform.position + Vector3.down * _collider.height / 2;
 
-            if (Physics.CapsuleCast(point1, point2, _collider.radius * 0.99f, _mainDir, out var raycastHit, _TopSpeed * Time.fixedDeltaTime))
+            if (Physics.CapsuleCast(point1, point2, _collider.radius * 0.99f, _mainDir, out var raycastHit, _TopSpeed * Time.fixedDeltaTime,  _obstaclesLayer))
             {
                 // - Check if the angle to that obstacle would exceed the avoidance angle threshold.
                 var normalInverted = -raycastHit.normal;

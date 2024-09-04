@@ -33,6 +33,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 8663608987625499380}
+  - {fileID: 2466530936693193361}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!136 &4058597151355092893
@@ -74,12 +75,15 @@ MonoBehaviour:
   _groundLayer:
     serializedVersion: 2
     m_Bits: 64
+  _obstaclesLayer:
+    serializedVersion: 2
+    m_Bits: 1
   _AccelerationDuration: 0.4
   _accelerationProfile: 1
   _DecelerationDuration: 0.15
   _decelerationProfile: 0
   _ObstacleAvoidanceEnabled: 1
-  _AvoidanceAngleThreshold: 15
+  _AvoidanceAngleThreshold: 10
 --- !u!54 &8026205018498635478
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -107,6 +111,51 @@ Rigidbody:
   m_Interpolate: 2
   m_Constraints: 116
   m_CollisionDetection: 0
+--- !u!1 &7629359451819449573
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2466530936693193361}
+  - component: {fileID: 8897550286172936678}
+  m_Layer: 3
+  m_Name: GrassShaderInteractor
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2466530936693193361
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7629359451819449573}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: -1, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4862276303349603235}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8897550286172936678
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7629359451819449573}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7cbc32f2cb2e81b448e6a8a16b50043c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  radius: 0.5
 --- !u!1001 &9201393922733100319
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -478,7 +527,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _rigidbody: {fileID: 8026205018498635478}
   _movementController: {fileID: 410387800808296529}
-  _TurningSpeed: 5
+  _TurningSpeed: 8
   _runningAnimationSpeed: 5.45
 --- !u!4 &8663608987625499380 stripped
 Transform:

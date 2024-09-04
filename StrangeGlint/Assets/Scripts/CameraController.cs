@@ -56,6 +56,7 @@ public class CameraController : MonoBehaviour
 
     public float _ZoomSpeed;
 
+    public float _MaxSpeedChange;
 
 
     PlayerInput _playerInput;
