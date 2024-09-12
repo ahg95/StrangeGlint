@@ -2,6 +2,8 @@ using UnityEngine;
 
 public class PlayerMovementController : MonoBehaviour
 {
+    [SerializeField]
+    public Transform _Test;
 
     [Header("General")]
     public float _TopSpeed;
@@ -14,7 +16,7 @@ public class PlayerMovementController : MonoBehaviour
 
     [Header("Acceleration")]
     [Tooltip("The time it takes the player from completely standing still to reaching top speed.")]
-    public float _AccelerationDuration;
+    public float _TimeToReachTopSpeed;
 
     [SerializeField, Tooltip("The curve that the player's speed follows when accelerating.")]
     EasingFunction _accelerationProfile;
@@ -25,13 +27,13 @@ public class PlayerMovementController : MonoBehaviour
         set
         {
             _accelerationProfile = value;
-            UpdateAccelerationCurve();
+            UpdateAccelerationFunction();
         }
     }
 
     [Header("Deceleration")]
     [Tooltip("The time it takes the player from moving at top speed to completely standing still.")]
-    public float _DecelerationDuration;
+    public float _TimeToStop;
 
     [SerializeField, Tooltip("The curve that the player's speed follows when decelerating.")]
     EasingFunction _decelerationProfile;
@@ -42,7 +44,7 @@ public class PlayerMovementController : MonoBehaviour
         set
         {
             _decelerationProfile = value;
-            UpdateDecelerationCurve();
+            UpdateDecelerationFunction();
         }
     }
 
@@ -50,10 +52,17 @@ public class PlayerMovementController : MonoBehaviour
     [Tooltip("Enables obstacle avoidance.")]
     public bool _ObstacleAvoidanceEnabled;
     
-    [Range(0, 90), Tooltip("If the player directs the character towards a wall at a greater angle than this, the player will move perpendicular to the wall.")]
-    public float _AvoidanceAngleThreshold;
+    [Range(0, 90), Tooltip("The controller will only avoid an obstacle if the angle between its surface normal and the input direction is at least this high.")]
+    public float _MinimumSurfaceAngle;
 
-    Vector3 _mainDir = Vector3.forward;
+    [Tooltip("The highest angle that the controller is allowed to steer the player away from their intended movement direction.")]
+    public float _AllowedSteeringAngle;
+
+    [Tooltip("The controller may steer the player around obstacles by this additional angle. Higher values improve performance.")]
+    public float _AllowedAngleError;
+
+    [Tooltip("The maximum distance at which the controller will avoid an obstacle.")]
+    public float _DetectionDistance;
 
     PlayerInput _playerInput;
 
@@ -67,24 +76,25 @@ public class PlayerMovementController : MonoBehaviour
     public delegate float Function(float x);
 
     [SerializeField, HideInInspector]
-    Function _accCurve;
+    Function _accelerationFunction;
 
     [SerializeField, HideInInspector]
-    Function _accCurveInv;
+    Function _inverseAccelerationFunction;
 
     [SerializeField, HideInInspector]
-    Function _decCurve;
+    Function _decelerationFunction;
 
     [SerializeField, HideInInspector]
-    Function _decCurveInv;
+    Function _inverseDecelerationFunction;
 
+    [SerializeField, HideInInspector]
+    Function _integralDecelerationFunction;
 
     private void OnValidate()
     {
-        UpdateAccelerationCurve();
-        UpdateDecelerationCurve();
+        UpdateAccelerationFunction();
+        UpdateDecelerationFunction();
     }
-
 
     void Awake()
     {
@@ -92,8 +102,8 @@ public class PlayerMovementController : MonoBehaviour
         _rigidbody = GetComponent<Rigidbody>();
         _collider = GetComponent<CapsuleCollider>();
 
-        UpdateAccelerationCurve();
-        UpdateDecelerationCurve();
+        UpdateAccelerationFunction();
+        UpdateDecelerationFunction();
     }
 
     private void OnEnable()
@@ -108,320 +118,324 @@ public class PlayerMovementController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        // Calculate the velocity on the ground plane.
-        var currVelFlattened = _rigidbody.velocity;
-        currVelFlattened.y = 0;
-
-
-
-        // Update the main direction.
-        // - Construct the main direction from the player input. If the input is a 0 vector, then keep the previous main direction.
+        // Calculate the next velocity of the player.
         var movementInput = _playerInput.Player.Move.ReadValue<Vector2>();
-        var input = new Vector3(movementInput.x, 0, movementInput.y);
-        _mainDir = input == Vector3.zero ? _mainDir : input.normalized;
 
-        // - Check if the player would run against an obstacle.
+        var newVelocity = CalculateNextVelocity(_rigidbody.velocity, movementInput);
+
+        // Apply the obstacle avoidance if it is enabled.
         if (_ObstacleAvoidanceEnabled)
         {
-            var point1 = _collider.center + transform.position + Vector3.up * _collider.height / 2;
-            var point2 = _collider.center + transform.position + Vector3.down * _collider.height / 2;
+            // Check if the player would run against an obstacle.
 
-            if (Physics.CapsuleCast(point1, point2, _collider.radius * 0.99f, _mainDir, out var raycastHit, _TopSpeed * Time.fixedDeltaTime,  _obstaclesLayer))
+            // - Perform a cast in the movement direction of the player.
+            // - - Calculate values that define the collider's capsule shape for the raycast.
+            var capsulePoint1 = _collider.center + transform.position + Vector3.up * _collider.height / 2;
+            var capsulePoint2 = _collider.center + transform.position + Vector3.down * _collider.height / 2;
+
+            // - - The radius of the capsule for the raycast is chosen smaller than the collider's radius to allow the raycast to hit obstacles that touch the collider.
+            var colliderRadius = _collider.radius * 0.99f;
+
+            // - Calculate the distance for the raycast. The raycast should only check for obstacles that the player would definitely collide with plus the provided detection distance.
+            // - The detection distance should be greater 0 because the calculated stopping position deviates somewhat from the actual position where the player stops.
+            var stoppingPosition = CalculateStoppingPosition(transform.position, newVelocity);
+            var raycastDistance = (transform.position - stoppingPosition).magnitude + _DetectionDistance;
+
+            var raycastDirection = newVelocity;
+
+            if (Physics.CapsuleCast(capsulePoint1, capsulePoint2, colliderRadius, raycastDirection, out var raycastHit, raycastDistance, _obstaclesLayer))
             {
-                // - Check if the angle to that obstacle would exceed the avoidance angle threshold.
-                var normalInverted = -raycastHit.normal;
+                // There is an obstacle in the path of the player.
+                // Check if the player intentionally moves towards the obstacle by checking the angle between the input and the hit normal.
+                var normalInverted2D = new Vector2(-raycastHit.normal.x, -raycastHit.normal.z);
 
-                var angleToWall = Vector3.SignedAngle(_mainDir, normalInverted, Vector3.up);
+                var angleToWall = Vector2.SignedAngle(movementInput, normalInverted2D);
 
-                if (Mathf.Abs(angleToWall) > _AvoidanceAngleThreshold)
+                if (Mathf.Abs(angleToWall) > _MinimumSurfaceAngle)
                 {
-                    // Adjust the main direction so the player walks around the obstacle.
-                    var normalInverted2D = new Vector2(normalInverted.x, normalInverted.z);
+                    // The player probably does not want to hit the obstacle, so engage the obstacle avoidance.
 
-                    var perpDirToWall2D = Vector2.Perpendicular(normalInverted2D);
+                    // - Capsule cast around the obstacle until there is no obstacle in the way or until avoiding the obstacle means deviating too much from the player's intended movement direction.
+                    var deviationAngle = 0f;
 
-                    var perpDirToWall = new Vector3(perpDirToWall2D.x, 0, perpDirToWall2D.y).normalized;
+                    var hitPoint = raycastHit.point;
 
-                    _mainDir = Mathf.Sign(angleToWall) * perpDirToWall;
+                    while (true)
+                    {
+                        // Check if avoiding the obstacle means deviating too much from the player's intended movement direction.
+                        // - Calculate the angle by which the velocity must be rotated to avoid the obstacle.
+                        var hitpointDelta = transform.position - hitPoint;
+                        hitpointDelta.y = 0;
+                        var hitpointDistance = hitpointDelta.magnitude;
+
+                        var angleIncrease = Mathf.Abs(Mathf.Atan(colliderRadius / hitpointDistance) + _AllowedAngleError);
+
+                        // - Calculate the total angle of deviation.
+                        deviationAngle += angleIncrease;
+
+                        // - If the total angle of deviation is too large then we abort the obstacle avoidance. The player will move in the intended direction against the obstacle.
+                        if (deviationAngle > _AllowedSteeringAngle)
+                            break;
+
+                        // The new angle does not deviate too much from the player's intended movement direction.
+                        // Check if there is an obstacle in the new direction.
+
+                        // - Calculate a new direction based on the angle increase.
+                        raycastDirection = Quaternion.AngleAxis(Mathf.Sign(angleToWall) * angleIncrease, Vector3.up) * raycastDirection;
+
+                        // - Calculate the new raycast distance
+                        raycastDistance = hitpointDistance;
+
+                        if (!Physics.CapsuleCast(capsulePoint1, capsulePoint2, colliderRadius, raycastDirection, out var hit, raycastDistance, _obstaclesLayer))
+                        {
+                            // The way is free and does not deviate too much from the intended direction.
+                            // Therefore overwrite the movement input of the player with the new direction.
+
+                            raycastDirection = raycastDirection.normalized;
+
+                            newVelocity = CalculateNextVelocity(_rigidbody.velocity, new Vector2(raycastDirection.x, raycastDirection.z));
+                            break;
+                        }
+
+                        // Update the hit point that should be avoided.
+                        hitPoint = hit.point;
+                    }
                 }
             }
         }
 
+        // Apply the new velocity that was calculated before.
+        _rigidbody.velocity = newVelocity;
 
 
-        // Adjust the player's velocity within the main direction
+        SnapToGround();
+    }
 
-        // - Calculate the speed with which the player is moving into the main direction (dot product).
-        var mainDirSpeed = currVelFlattened.magnitude * Mathf.Cos(Vector3.Angle(_mainDir, currVelFlattened) * Mathf.Deg2Rad);
 
-        // - Calculate the speed with which the player should be moving into the main direction.
-        var mainDirTargetSpeed = input.magnitude * _TopSpeed;
+    void SnapToGround()
+    {
+        // Position the player on top of the ground.
+        if (Physics.Raycast(transform.position, Vector3.down, out var groundHit, Mathf.Infinity, _groundLayer))
+            transform.position = groundHit.point + Vector3.up * _collider.height / 2 - _collider.center;
+    }
 
-        // - Check if the player is moving towards the main direction, but below target speed.
-        if (mainDirSpeed >= 0 && mainDirSpeed < mainDirTargetSpeed)
+
+    Vector3 CalculateNextVelocity(Vector3 currentVelocity, Vector2 movementInput)
+    {
+        // Calculate the target velocity as a two-dimensional vector.
+        var targetVelocity2D = movementInput * _TopSpeed;
+
+        // The current velocity will transition to the target velocity in a straight line.
+        var currentVelocity2D = new Vector2(currentVelocity.x, currentVelocity.z);
+        var deltaVelocityDirection = (targetVelocity2D - currentVelocity2D).normalized;
+
+        // The point on the line between current and target velocity that is closest to the origin is where the controller switches from decelerating to accelerating.
+        var turningPoint = Vector2Utility.CalculateLinePointClosestToOrigin(currentVelocity2D, deltaVelocityDirection);
+        var currentDistanceToTurningPoint = (turningPoint - currentVelocity2D).magnitude;
+
+        var deltaTurningPoint = turningPoint - currentVelocity2D;
+
+        // If the turning point is located in front of the target velocity then the controller must decelerate. Otherwise, it must accelerate.
+        if (Vector2.Dot(deltaVelocityDirection, deltaTurningPoint) > 0)
         {
-            // Speed the player up according to the acceleration curve.
+            // The turning point is located in front of the target velocity, so the controller must decelerate.
+            // The current speed in the relevant direction is described by the distance to the turning point.
+            var x = InverseDecelerationCurve(currentDistanceToTurningPoint);
 
-            // - First, determine where the player's speed is located on the acceleration curve.
-            var x = AccelerationCurveInverse(mainDirSpeed);
-
-            // - Next, progress along the acceleration curve.
-            x += Time.fixedDeltaTime;
-
-            // - Then calculate the new speed that the player should have in the main direction.
-            var nextSpeed = AccelerationCurve(x);
-
-            // - Make sure that the new speed does not exceed the target speed.
-            nextSpeed = Mathf.Min(nextSpeed, mainDirTargetSpeed);
-
-            // - Calculate the change in velocity necessary to achieve the new speed.
-            var velChange = _mainDir * (nextSpeed - mainDirSpeed);
-
-            // - And finally, apply the change.
-            _rigidbody.velocity += velChange;
-
-            Debug.DrawRay(transform.position, velChange, Color.blue, 0f, false);
-
-            // - Check if the player is moving towards the main direction, but above target speed.
-        } else if (mainDirSpeed >= 0 && mainDirSpeed > mainDirTargetSpeed)
-        {
-            // Slow the player down according to the deceleration curve.
-
-            // - First, determine where the player's speed is located on the deceleration curve.
-            var x = DecelerationCurveInverse(mainDirSpeed);
-
-            // - Next, move back along the deceleration curve.
             x -= Time.fixedDeltaTime;
 
-            // - Then calculate the new speed that the player should have in the main direction.
-            var nextSpeed = DecelerationCurve(x);
-
-            // - Make sure that the new speed does not go below the target speed.
-            nextSpeed = Mathf.Max(nextSpeed, mainDirTargetSpeed);
-
-            // - Calculate the change in velocity necessary to achieve the new speed.
-            var velChange = _mainDir * (nextSpeed - mainDirSpeed);
-
-            // - And finally, apply the change.
-            _rigidbody.velocity += velChange;
-
-            Debug.DrawRay(transform.position, velChange, Color.blue, 0f, false);
-
-            // - Check if the player is moving away from the main direction.
-        } else if (mainDirSpeed < 0)
-        {
-            // Decelerate the player in the main direction.
-
-            // - First, determine where the player's speed is located on the deceleration curve.
-            // - Since mainDirSpeed < 0, mainDirSpeed must be negated here to get the correct result.
-            var x = DecelerationCurveInverse(-mainDirSpeed);
-
-            // - Next, move back along the deceleration curve.
-            x -= Time.fixedDeltaTime;
-
-            // - Check if we reached the start of the deceleration curve.
+            // If x < 0 then the start of the deceleration curve has been reached.
+            // This means that the controller will reach the turning point and must accelerate for the remaining time.
             if (x < 0)
             {
-                // The start of the deceleration curve has been reached, meaning the player will completely stop within the main direction.
-                // If there is time left, then the player must be accelerated according to the acceleration curve.
-
-                // - Calculate the time left after reaching the start of the deceleration curve.
                 x = -x;
 
-                // - Calculate the new speed that the player should have in the main direction.
-                var nextSpeed = AccelerationCurve(x);
+                var newVelocity2D = Vector2.MoveTowards(turningPoint, targetVelocity2D, AccelerationCurve(x));
 
-                // - Make sure that the new speed does not exceed the target speed.
-                nextSpeed = Mathf.Min(nextSpeed, mainDirTargetSpeed);
-
-                // - Calculate the change in velocity necessary to reach the new speed.
-                var velChange = _mainDir * (nextSpeed - mainDirSpeed);
-
-                // - Finally, apply the change in velocity.
-                _rigidbody.velocity += velChange;
-
-                Debug.DrawRay(transform.position, velChange, Color.blue, 0f, false);
+                return new Vector3(newVelocity2D.x, 0, newVelocity2D.y);
 
             } else
             {
-                // Decelerate the player according to the deceleration curve.
+                // The new velocity will stay behind the turning point.
+                var newSpeed = DecelerationCurve(x);
 
-                // - Calculate the new speed that the player should have in the direction OPPOSITE to the main direction
-                var nextSpeed = DecelerationCurve(x);
+                var newVelocity2D = Vector2.MoveTowards(turningPoint, currentVelocity2D, newSpeed);
 
-                // - Calculate the change in velocity necessary to reach the new speed.
-                var velChange = _mainDir * (-mainDirSpeed - nextSpeed);
-
-                // - And apply the velocity change.
-                _rigidbody.velocity += velChange;
-
-                Debug.DrawRay(transform.position, velChange, Color.blue, 0f, false);
+                return new Vector3(newVelocity2D.x, 0, newVelocity2D.y);
             }
-        }
-
-
-
-        // Adjust the player's speed within the perpendicular direction to the main direction.
-
-        // - Calculate the vector perpendicular to the main direction (anti-clockwise).
-        var perpDir2D = Vector2.Perpendicular(new Vector2(_mainDir.x, _mainDir.z));
-        var perpDir = new Vector3(perpDir2D.x, 0, perpDir2D.y).normalized;
-
-        // - Calculate the speed of the player in the perpendicular direction (dot product).
-        var perpDirSpeed = currVelFlattened.magnitude * Mathf.Cos(Vector3.Angle(perpDir, currVelFlattened) * Mathf.Deg2Rad);
-
-        // - Calculate where the player's speed is located on the deceleration curve.
-        // - The speed might be positive or negative, but we need a positive value for the function.
-        var progress = DecelerationCurveInverse(Mathf.Abs(perpDirSpeed));
-
-        // - Move back on the deceleration curve.
-        progress -= Time.fixedDeltaTime;
-
-        // - Calculate the new speed that the player should have.
-        var newSpeed = DecelerationCurve(progress);
-
-        // - Calculate the change in velocity necessary to achieve that new speed.
-        var velocityChange = perpDir * Mathf.Sign(perpDirSpeed) * (newSpeed - Mathf.Abs(perpDirSpeed));
-
-        // - Finally, apply the change in velocity.
-        _rigidbody.velocity += velocityChange;
-
-        Debug.DrawRay(transform.position, velocityChange, Color.red, 0f, false);
-
-
-
-        // Position the player on top of the ground.
-        if (Physics.Raycast(transform.position, Vector3.down, out var hit, Mathf.Infinity, _groundLayer))
+        } else
         {
-            transform.position = hit.point + Vector3.up * _collider.height / 2 - _collider.center;
+            // The controller must accelerate.
+
+            var x = InverseAccelerationCurve(currentDistanceToTurningPoint);
+
+            x += Time.fixedDeltaTime;
+
+            var newSpeed = AccelerationCurve(x);
+
+            var newVelocity2D = Vector2.MoveTowards(turningPoint, targetVelocity2D, newSpeed);
+
+            return new Vector3(newVelocity2D.x, 0, newVelocity2D.y);
         }
     }
 
 
-    void UpdateAccelerationCurve()
+
+    Vector3 CalculateStoppingPosition(Vector3 position, Vector3 velocity)
+    {
+        // Initialize the result variable.
+        velocity.y = 0;
+        var currentSpeed = velocity.magnitude;
+
+        // Calculate where the currentVelocity is on the deceleration curve
+        var x = InverseDecelerationCurve(currentSpeed);
+
+        // Calculate the distance traveled when stopping now
+        var distance = IntegralDecelerationCurve(x);
+
+        var stoppingPosition = position + velocity.normalized * distance;
+
+        return stoppingPosition;
+    }
+
+    void UpdateAccelerationFunction()
     {
         switch (_accelerationProfile)
         {
             case EasingFunction.EaseInSine:
-                _accCurve = EasingFunctions.EaseInSine;
-                _accCurveInv = EasingFunctions.InverseEaseInSine;
+                _accelerationFunction = EasingFunctions.EaseInSine;
+                _inverseAccelerationFunction = EasingFunctions.InverseEaseInSine;
                 break;
             case EasingFunction.EaseOutSine:
-                _accCurve = EasingFunctions.EaseOutSine;
-                _accCurveInv = EasingFunctions.InverseEaseOutSine;
+                _accelerationFunction = EasingFunctions.EaseOutSine;
+                _inverseAccelerationFunction = EasingFunctions.InverseEaseOutSine;
                 break;
             case EasingFunction.EaseInCubic:
-                _accCurve = EasingFunctions.EaseInCubic;
-                _accCurveInv = EasingFunctions.InverseEaseInCubic;
+                _accelerationFunction = EasingFunctions.EaseInCubic;
+                _inverseAccelerationFunction = EasingFunctions.InverseEaseInCubic;
                 break;
             case EasingFunction.EaseOutCubic:
-                _accCurve = EasingFunctions.EaseOutCubic;
-                _accCurveInv = EasingFunctions.InverseEaseOutCubic;
+                _accelerationFunction = EasingFunctions.EaseOutCubic;
+                _inverseAccelerationFunction = EasingFunctions.InverseEaseOutCubic;
                 break;
             case EasingFunction.EaseInQuint:
-                _accCurve = EasingFunctions.EaseInQuint;
-                _accCurveInv = EasingFunctions.InverseEaseInQuint;
+                _accelerationFunction = EasingFunctions.EaseInQuint;
+                _inverseAccelerationFunction = EasingFunctions.InverseEaseInQuint;
                 break;
             case EasingFunction.EaseOutQuint:
-                _accCurve = EasingFunctions.EaseOutQuint;
-                _accCurveInv = EasingFunctions.InverseEaseOutQuint;
+                _accelerationFunction = EasingFunctions.EaseOutQuint;
+                _inverseAccelerationFunction = EasingFunctions.InverseEaseOutQuint;
                 break;
             case EasingFunction.EaseInCirc:
-                _accCurve = EasingFunctions.EaseInCirc;
-                _accCurveInv = EasingFunctions.InverseEaseInCirc;
+                _accelerationFunction = EasingFunctions.EaseInCirc;
+                _inverseAccelerationFunction = EasingFunctions.InverseEaseInCirc;
                 break;
             case EasingFunction.EaseOutCirc:
-                _accCurve = EasingFunctions.EaseOutCirc;
-                _accCurveInv = EasingFunctions.InverseEaseOutCirc;
+                _accelerationFunction = EasingFunctions.EaseOutCirc;
+                _inverseAccelerationFunction = EasingFunctions.InverseEaseOutCirc;
                 break;
             case EasingFunction.EaseInQuad:
-                _accCurve = EasingFunctions.EaseInQuad;
-                _accCurveInv = EasingFunctions.InverseEaseInQuad;
+                _accelerationFunction = EasingFunctions.EaseInQuad;
+                _inverseAccelerationFunction = EasingFunctions.InverseEaseInQuad;
                 break;
             case EasingFunction.EaseOutQuad:
-                _accCurve = EasingFunctions.EaseOutQuad;
-                _accCurveInv = EasingFunctions.InverseEaseOutQuad;
+                _accelerationFunction = EasingFunctions.EaseOutQuad;
+                _inverseAccelerationFunction = EasingFunctions.InverseEaseOutQuad;
                 break;
             case EasingFunction.EaseInQuart:
-                _accCurve = EasingFunctions.EaseInQuart;
-                _accCurveInv = EasingFunctions.InverseEaseInQuart;
+                _accelerationFunction = EasingFunctions.EaseInQuart;
+                _inverseAccelerationFunction = EasingFunctions.InverseEaseInQuart;
                 break;
             case EasingFunction.EaseOutQuart:
-                _accCurve = EasingFunctions.EaseOutQuart;
-                _accCurveInv = EasingFunctions.InverseEaseOutQuart;
+                _accelerationFunction = EasingFunctions.EaseOutQuart;
+                _inverseAccelerationFunction = EasingFunctions.InverseEaseOutQuart;
                 break;
             case EasingFunction.EaseInExpo:
-                _accCurve = EasingFunctions.EaseInExpo;
-                _accCurveInv = EasingFunctions.InverseEaseInExpo;
+                _accelerationFunction = EasingFunctions.EaseInExpo;
+                _inverseAccelerationFunction = EasingFunctions.InverseEaseInExpo;
                 break;
             case EasingFunction.EaseOutExpo:
-                _accCurve = EasingFunctions.EaseOutExpo;
-                _accCurveInv = EasingFunctions.InverseEaseOutExpo;
+                _accelerationFunction = EasingFunctions.EaseOutExpo;
+                _inverseAccelerationFunction = EasingFunctions.InverseEaseOutExpo;
                 break;
         }
     }
 
     
 
-    void UpdateDecelerationCurve()
+    void UpdateDecelerationFunction()
     {
         switch (_decelerationProfile)
         {
             case EasingFunction.EaseInSine:
-                _decCurve = EasingFunctions.EaseInSine;
-                _decCurveInv = EasingFunctions.InverseEaseInSine;
+                _decelerationFunction = EasingFunctions.EaseInSine;
+                _inverseDecelerationFunction = EasingFunctions.InverseEaseInSine;
+                _integralDecelerationFunction = EasingFunctions.IntegralEaseInSine;
                 break;
             case EasingFunction.EaseOutSine:
-                _decCurve = EasingFunctions.EaseOutSine;
-                _decCurveInv = EasingFunctions.InverseEaseOutSine;
+                _decelerationFunction = EasingFunctions.EaseOutSine;
+                _inverseDecelerationFunction = EasingFunctions.InverseEaseOutSine;
+                _integralDecelerationFunction = EasingFunctions.IntegralEaseOutSine;
                 break;
             case EasingFunction.EaseInCubic:
-                _decCurve = EasingFunctions.EaseInCubic;
-                _decCurveInv = EasingFunctions.InverseEaseInCubic;
+                _decelerationFunction = EasingFunctions.EaseInCubic;
+                _inverseDecelerationFunction = EasingFunctions.InverseEaseInCubic;
+                _integralDecelerationFunction = EasingFunctions.IntegralEaseInCubic;
                 break;
             case EasingFunction.EaseOutCubic:
-                _decCurve = EasingFunctions.EaseOutCubic;
-                _decCurveInv = EasingFunctions.InverseEaseOutCubic;
+                _decelerationFunction = EasingFunctions.EaseOutCubic;
+                _inverseDecelerationFunction = EasingFunctions.InverseEaseOutCubic;
+                _integralDecelerationFunction = EasingFunctions.IntegralEaseOutCubic;
                 break;
             case EasingFunction.EaseInQuint:
-                _decCurve = EasingFunctions.EaseInQuint;
-                _decCurveInv = EasingFunctions.InverseEaseInQuint;
+                _decelerationFunction = EasingFunctions.EaseInQuint;
+                _inverseDecelerationFunction = EasingFunctions.InverseEaseInQuint;
+                _integralDecelerationFunction = EasingFunctions.IntegralEaseInQuint;
                 break;
             case EasingFunction.EaseOutQuint:
-                _decCurve = EasingFunctions.EaseOutQuint;
-                _decCurveInv = EasingFunctions.InverseEaseOutQuint;
+                _decelerationFunction = EasingFunctions.EaseOutQuint;
+                _inverseDecelerationFunction = EasingFunctions.InverseEaseOutQuint;
+                _integralDecelerationFunction = EasingFunctions.IntegralEaseOutQuint;
                 break;
             case EasingFunction.EaseInCirc:
-                _decCurve = EasingFunctions.EaseInCirc;
-                _decCurveInv = EasingFunctions.InverseEaseInCirc;
+                _decelerationFunction = EasingFunctions.EaseInCirc;
+                _inverseDecelerationFunction = EasingFunctions.InverseEaseInCirc;
+                _integralDecelerationFunction = EasingFunctions.IntegralEaseInCirc;
                 break;
             case EasingFunction.EaseOutCirc:
-                _decCurve = EasingFunctions.EaseOutCirc;
-                _decCurveInv = EasingFunctions.InverseEaseOutCirc;
+                _decelerationFunction = EasingFunctions.EaseOutCirc;
+                _inverseDecelerationFunction = EasingFunctions.InverseEaseOutCirc;
+                _integralDecelerationFunction = EasingFunctions.IntegralEaseOutCirc;
                 break;
             case EasingFunction.EaseInQuad:
-                _decCurve = EasingFunctions.EaseInQuad;
-                _decCurveInv = EasingFunctions.InverseEaseInQuad;
+                _decelerationFunction = EasingFunctions.EaseInQuad;
+                _inverseDecelerationFunction = EasingFunctions.InverseEaseInQuad;
+                _integralDecelerationFunction = EasingFunctions.IntegralEaseInQuad;
                 break;
             case EasingFunction.EaseOutQuad:
-                _decCurve = EasingFunctions.EaseOutQuad;
-                _decCurveInv = EasingFunctions.InverseEaseOutQuad;
+                _decelerationFunction = EasingFunctions.EaseOutQuad;
+                _inverseDecelerationFunction = EasingFunctions.InverseEaseOutQuad;
+                _integralDecelerationFunction = EasingFunctions.IntegralEaseOutQuad;
                 break;
             case EasingFunction.EaseInQuart:
-                _decCurve = EasingFunctions.EaseInQuart;
-                _decCurveInv = EasingFunctions.InverseEaseInQuart;
+                _decelerationFunction = EasingFunctions.EaseInQuart;
+                _inverseDecelerationFunction = EasingFunctions.InverseEaseInQuart;
+                _integralDecelerationFunction = EasingFunctions.IntegralEaseInQuart;
                 break;
             case EasingFunction.EaseOutQuart:
-                _decCurve = EasingFunctions.EaseOutQuart;
-                _decCurveInv = EasingFunctions.InverseEaseOutQuart;
+                _decelerationFunction = EasingFunctions.EaseOutQuart;
+                _inverseDecelerationFunction = EasingFunctions.InverseEaseOutQuart;
+                _integralDecelerationFunction = EasingFunctions.IntegralEaseOutQuart;
                 break;
             case EasingFunction.EaseInExpo:
-                _decCurve = EasingFunctions.EaseInExpo;
-                _decCurveInv = EasingFunctions.InverseEaseInExpo;
+                _decelerationFunction = EasingFunctions.EaseInExpo;
+                _inverseDecelerationFunction = EasingFunctions.InverseEaseInExpo;
+                _integralDecelerationFunction = EasingFunctions.IntegralEaseInExpo;
                 break;
             case EasingFunction.EaseOutExpo:
-                _decCurve = EasingFunctions.EaseOutExpo;
-                _decCurveInv = EasingFunctions.InverseEaseOutExpo;
+                _decelerationFunction = EasingFunctions.EaseOutExpo;
+                _inverseDecelerationFunction = EasingFunctions.InverseEaseOutExpo;
+                _integralDecelerationFunction = EasingFunctions.IntegralEaseOutExpo;
                 break;
         }
     }
@@ -438,21 +452,21 @@ public class PlayerMovementController : MonoBehaviour
         if (x <= 0)
             return 0;
 
-        if (x >= _AccelerationDuration)
+        if (x >= _TimeToReachTopSpeed)
             return _TopSpeed;
 
-        return _TopSpeed * _accCurve(x / _AccelerationDuration);
+        return _TopSpeed * _accelerationFunction(x / _TimeToReachTopSpeed);
     }
 
-    float AccelerationCurveInverse(float x)
+    float InverseAccelerationCurve(float x)
     {
         if (x <= 0)
             return 0;
 
         if (x >= _TopSpeed)
-            return _AccelerationDuration;
+            return _TimeToReachTopSpeed;
 
-        return _AccelerationDuration * _accCurveInv(x / _TopSpeed);
+        return _TimeToReachTopSpeed * _inverseAccelerationFunction(x / _TopSpeed);
     }
 
     float DecelerationCurve(float x)
@@ -460,20 +474,31 @@ public class PlayerMovementController : MonoBehaviour
         if (x <= 0)
             return 0;
 
-        if (x >= _DecelerationDuration)
+        if (x >= _TimeToStop)
             return _TopSpeed;
 
-        return _TopSpeed * _decCurve(x / _DecelerationDuration);
+        return _TopSpeed * _decelerationFunction(x / _TimeToStop);
     }
 
-    float DecelerationCurveInverse(float x)
+    float InverseDecelerationCurve(float x)
     {
         if (x <= 0)
             return 0;
 
         if (x >= _TopSpeed)
-            return _DecelerationDuration;
+            return _TimeToStop;
 
-        return _DecelerationDuration * _decCurveInv(x / _TopSpeed);
+        return _TimeToStop * _inverseDecelerationFunction(x / _TopSpeed);
     }
+
+    float IntegralDecelerationCurve(float x)
+    {
+        if (x <= 0)
+            return 0;
+
+        if (x >= _TimeToStop)
+            return _TopSpeed * _TimeToStop;
+
+        return _TopSpeed * _TimeToStop * _integralDecelerationFunction(x / _TimeToStop);
+    } 
 }

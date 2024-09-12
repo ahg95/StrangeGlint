@@ -64,20 +64,50 @@ public class UIController : MonoBehaviour
 
     EasingFunction _initialDecelerationCurve;
 
-    // - Wall Sliding Enabled
+
+
+    // Obstacle Avoidance
+    // - Obstacle Avoidance Enabled
     [SerializeField]
-    Toggle _wallSlidingEnabledToggle;
+    Toggle _obstacleAvoidanceEnabledToggle;
 
-    bool _initialWallSlidingEnabled;
+    bool _initialObstacleAvoidanceEnabled;
 
-    // - Wall Sliding Angle Threshold
+    // - Minimum Surface Angle
     [SerializeField]
-    Slider _wallSlidingAngleSlider;
+    Slider _minimumSurfaceAngleSlider;
 
     [SerializeField]
-    TextMeshProUGUI _wallSlidingAngleText;
+    TextMeshProUGUI _minimumSurfaceAngleText;
 
-    float _initialWallSlidingAngle;
+    float _initialMinimumSurfaceAngle;
+
+    // - Allowed Steering Angle
+    [SerializeField]
+    Slider _allowedSteeringAngleSlider;
+
+    [SerializeField]
+    TextMeshProUGUI _allowedSteeringAngleText;
+
+    float _initialAllowedSteeringAngle;
+
+    // - Allowed Angle Error
+    [SerializeField]
+    Slider _allowedAngleErrorSlider;
+
+    [SerializeField]
+    TextMeshProUGUI _allowedAngleErrorText;
+
+    float _initialAllowedAngleError;
+
+    // - Detection Distance
+    [SerializeField]
+    Slider _detectionDistanceSlider;
+
+    [SerializeField]
+    TextMeshProUGUI _detectionDistanceText;
+
+    float _initialDetectionDistance;
 
 
 
@@ -169,14 +199,17 @@ public class UIController : MonoBehaviour
         // - Movement
         _initialTopSpeed = _movementController._TopSpeed;
 
-        _initialAccelerationDuration = _movementController._AccelerationDuration;
+        _initialAccelerationDuration = _movementController._TimeToReachTopSpeed;
         _initialAccelerationCurve = _movementController.AccelerationProfile;
 
-        _initialDecelerationDuration = _movementController._DecelerationDuration;
+        _initialDecelerationDuration = _movementController._TimeToStop;
         _initialDecelerationCurve = _movementController.DecelerationProfile;
 
-        _initialWallSlidingEnabled = _movementController._ObstacleAvoidanceEnabled;
-        _initialWallSlidingAngle = _movementController._AvoidanceAngleThreshold;
+        _initialObstacleAvoidanceEnabled = _movementController._ObstacleAvoidanceEnabled;
+        _initialMinimumSurfaceAngle = _movementController._MinimumSurfaceAngle;
+        _initialAllowedSteeringAngle = _movementController._AllowedSteeringAngle;
+        _initialAllowedAngleError = _movementController._AllowedAngleError;
+        _initialDetectionDistance = _movementController._DetectionDistance;
 
         // - Animations
         _initialTurningTime = _animationController._TurningSpeed;
@@ -208,8 +241,11 @@ public class UIController : MonoBehaviour
         _decelerationDurationSlider.onValueChanged.AddListener(delegate { OnDecelerationDurationSliderChange(); });
         _decelerationCurveDropdown.onValueChanged.AddListener(delegate { OnDecelerationCurveDropdownChange(); });
 
-        _wallSlidingEnabledToggle.onValueChanged.AddListener(delegate { OnWallSlidingEnabledToggleChange(); });
-        _wallSlidingAngleSlider.onValueChanged.AddListener(delegate { OnWallSlidingAngleSliderChange(); });
+        _obstacleAvoidanceEnabledToggle.onValueChanged.AddListener(delegate { OnObstacleAvoidanceEnabledToggleChange(); });
+        _minimumSurfaceAngleSlider.onValueChanged.AddListener(delegate { OnMinimumSurfaceAngleSliderChange(); });
+        _allowedSteeringAngleSlider.onValueChanged.AddListener(delegate { OnAllowedSteeringAngleSliderChange(); });
+        _allowedAngleErrorSlider.onValueChanged.AddListener(delegate { OnAllowedAngleErrorSliderChange(); });
+        _detectionDistanceSlider.onValueChanged.AddListener(delegate { OnDetectionDistanceSliderChange(); });
 
         // - Animation controls
         _turningTimeSlider.onValueChanged.AddListener(delegate { OnTurningTimeSliderChange(); });
@@ -245,8 +281,14 @@ public class UIController : MonoBehaviour
         _decelerationDurationSlider.value = _initialDecelerationDuration;
         _decelerationCurveDropdown.value = (int)_initialDecelerationCurve;
 
-        _wallSlidingEnabledToggle.isOn = _initialWallSlidingEnabled;
-        _wallSlidingAngleSlider.value = _initialWallSlidingAngle;
+        _obstacleAvoidanceEnabledToggle.isOn = _initialObstacleAvoidanceEnabled;
+        _minimumSurfaceAngleSlider.value = _initialMinimumSurfaceAngle;
+
+        _allowedSteeringAngleSlider.value = _initialAllowedSteeringAngle;
+        _allowedAngleErrorSlider.value = _initialAllowedAngleError;
+        _detectionDistanceSlider.value = _initialDetectionDistance;
+
+
 
         // - Animation controls
         _turningTimeSlider.value = _initialTurningTime;
@@ -281,7 +323,7 @@ public class UIController : MonoBehaviour
         var value = _accelerationDurationSlider.value;
 
         _accelerationDurationText.text = value.ToString();
-        _movementController._AccelerationDuration = value;
+        _movementController._TimeToReachTopSpeed = value;
     }
 
     void OnAccelerationCurveDropdownChange()
@@ -294,7 +336,7 @@ public class UIController : MonoBehaviour
         var value = _decelerationDurationSlider.value;
 
         _decelerationDurationText.text = value.ToString();
-        _movementController._DecelerationDuration = value;
+        _movementController._TimeToStop = value;
     }
 
     void OnDecelerationCurveDropdownChange()
@@ -302,17 +344,41 @@ public class UIController : MonoBehaviour
         _movementController.DecelerationProfile = (EasingFunction)_decelerationCurveDropdown.value;
     }
 
-    void OnWallSlidingEnabledToggleChange()
+    void OnObstacleAvoidanceEnabledToggleChange()
     {
-        _movementController._ObstacleAvoidanceEnabled = _wallSlidingEnabledToggle.isOn;
+        _movementController._ObstacleAvoidanceEnabled = _obstacleAvoidanceEnabledToggle.isOn;
     }
 
-    void OnWallSlidingAngleSliderChange()
+    void OnMinimumSurfaceAngleSliderChange()
     {
-        var value = _wallSlidingAngleSlider.value;
+        var value = _minimumSurfaceAngleSlider.value;
 
-        _wallSlidingAngleText.text = value.ToString();
-        _movementController._AvoidanceAngleThreshold = value;
+        _minimumSurfaceAngleText.text = value.ToString();
+        _movementController._MinimumSurfaceAngle = value;
+    }
+
+    private void OnDetectionDistanceSliderChange()
+    {
+        var value = _detectionDistanceSlider.value;
+
+        _detectionDistanceText.text = value.ToString();
+        _movementController._DetectionDistance = value;
+    }
+
+    private void OnAllowedAngleErrorSliderChange()
+    {
+        var value = _allowedAngleErrorSlider.value;
+
+        _allowedAngleErrorText.text = value.ToString();
+        _movementController._AllowedAngleError = value;
+    }
+
+    private void OnAllowedSteeringAngleSliderChange()
+    {
+        var value = _allowedSteeringAngleSlider.value;
+
+        _allowedSteeringAngleText.text = value.ToString();
+        _movementController._AllowedSteeringAngle = value;
     }
 
 
