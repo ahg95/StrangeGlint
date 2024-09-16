@@ -12,6 +12,9 @@ public class CameraController : MonoBehaviour
     [SerializeField]
     EventSystem _eventSystem;
 
+    [Header("Camera Movement")]
+    public float _MovementSmoothness;
+
     [Header("Camera Angle")]
     [SerializeField]
     EasingFunction _angleProfile;
@@ -50,7 +53,7 @@ public class CameraController : MonoBehaviour
 
     [Header("General")]
     [SerializeField]
-    Transform _focalPoint;
+    Transform _target;
 
     public int _NrOfZoomLevels;
 
@@ -59,7 +62,12 @@ public class CameraController : MonoBehaviour
     public float _MaxSpeedChange;
 
 
+
     PlayerInput _playerInput;
+
+    Vector3 _focalPoint;
+
+    Vector3 _velocity;
 
     float _zoomAlpha = 1;
 
@@ -115,6 +123,9 @@ public class CameraController : MonoBehaviour
 
         UpdateAngleCurve();
         UpdateDistanceCurve();
+
+        _focalPoint = _target.position;
+        _velocity = Vector3.zero;
     }
 
     private void OnEnable()
@@ -136,9 +147,12 @@ public class CameraController : MonoBehaviour
         var angle = AngleCurve(_zoomAlpha);
         transform.rotation = Quaternion.Euler(angle, 0, 0);
 
+        // Smoothly move the focal point towards the target
+        _focalPoint = Vector3.SmoothDamp(_focalPoint, _target.position, ref _velocity, _MovementSmoothness, 10000);
+
         // Set the distance of the camera to the focal point according to the zoom alpha value and the distance profile curve.
         var distance = DistanceCurve(_zoomAlpha);
-        transform.position = _focalPoint.position - distance * transform.forward;
+        transform.position = _focalPoint - distance * transform.forward;
     }
 
     void UpdateAngleCurve()

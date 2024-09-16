@@ -105,12 +105,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b11959c811ec38047b2414bbd52768a8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _raycaster: {fileID: 0}
+  _eventSystem: {fileID: 0}
+  _MovementSmoothness: 0.05
   _angleProfile: 9
   _MinAngle: 30
   _MaxAngle: 60
   _distanceProfile: 8
   _MinDistance: 3
   _MaxDistance: 12
-  _focalPoint: {fileID: 0}
+  _target: {fileID: 0}
   _NrOfZoomLevels: 7
   _ZoomSpeed: 5
+  _MaxSpeedChange: 0

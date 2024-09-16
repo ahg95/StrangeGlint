@@ -48,6 +48,24 @@ public class PlayerMovementController : MonoBehaviour
         }
     }
 
+    [Header("Inertia")]
+    [SerializeField, Tooltip("How much the controller will try to maintain the current velocity.")]
+    float _inertiaFactor;
+
+    public float InertiaFactor
+    {
+        get { return _inertiaFactor; }
+        set
+        {
+            _inertiaFactor = value;
+            UpdateMaximumVelocityChange();
+        }
+    }
+
+    float _maximumVelocityChange;
+
+    Vector2 _previousVelocity2D;
+
     [Header("Obstacle Avoidance")]
     [Tooltip("Enables obstacle avoidance.")]
     public bool _ObstacleAvoidanceEnabled;
@@ -94,6 +112,8 @@ public class PlayerMovementController : MonoBehaviour
     {
         UpdateAccelerationFunction();
         UpdateDecelerationFunction();
+
+        UpdateMaximumVelocityChange();
     }
 
     void Awake()
@@ -104,6 +124,8 @@ public class PlayerMovementController : MonoBehaviour
 
         UpdateAccelerationFunction();
         UpdateDecelerationFunction();
+
+        UpdateMaximumVelocityChange();
     }
 
     private void OnEnable()
@@ -121,7 +143,7 @@ public class PlayerMovementController : MonoBehaviour
         // Calculate the next velocity of the player.
         var movementInput = _playerInput.Player.Move.ReadValue<Vector2>();
 
-        var newVelocity = CalculateNextVelocity(_rigidbody.velocity, movementInput);
+        var newVelocity = CalculateNextVelocity(_previousVelocity2D, _rigidbody.velocity, movementInput);
 
         // Apply the obstacle avoidance if it is enabled.
         if (_ObstacleAvoidanceEnabled)
@@ -193,7 +215,7 @@ public class PlayerMovementController : MonoBehaviour
 
                             raycastDirection = raycastDirection.normalized;
 
-                            newVelocity = CalculateNextVelocity(_rigidbody.velocity, new Vector2(raycastDirection.x, raycastDirection.z));
+                            newVelocity = CalculateNextVelocity(_previousVelocity2D, _rigidbody.velocity, new Vector2(raycastDirection.x, raycastDirection.z));
                             break;
                         }
 
@@ -204,10 +226,13 @@ public class PlayerMovementController : MonoBehaviour
             }
         }
 
+        // Update the previous velocity.
+        _previousVelocity2D = new Vector2(newVelocity.x, newVelocity.z);
+
         // Apply the new velocity that was calculated before.
         _rigidbody.velocity = newVelocity;
 
-
+        // Snap the player model to the ground.
         SnapToGround();
     }
 
@@ -220,12 +245,13 @@ public class PlayerMovementController : MonoBehaviour
     }
 
 
-    Vector3 CalculateNextVelocity(Vector3 currentVelocity, Vector2 movementInput)
+    Vector3 CalculateNextVelocity(Vector2 previousVelocity2D, Vector3 currentVelocity, Vector2 movementInput)
     {
         // Calculate the target velocity as a two-dimensional vector.
         var targetVelocity2D = movementInput * _TopSpeed;
 
-        // The current velocity will transition to the target velocity in a straight line.
+        // The current velocity will attempt to transition to the target velocity in a straight line.
+        // Note that the damping that is applied later can create a curve in the transition.
         var currentVelocity2D = new Vector2(currentVelocity.x, currentVelocity.z);
         var deltaVelocityDirection = (targetVelocity2D - currentVelocity2D).normalized;
 
@@ -234,6 +260,8 @@ public class PlayerMovementController : MonoBehaviour
         var currentDistanceToTurningPoint = (turningPoint - currentVelocity2D).magnitude;
 
         var deltaTurningPoint = turningPoint - currentVelocity2D;
+
+        Vector2 newVelocity2D;
 
         // If the turning point is located in front of the target velocity then the controller must decelerate. Otherwise, it must accelerate.
         if (Vector2.Dot(deltaVelocityDirection, deltaTurningPoint) > 0)
@@ -250,18 +278,16 @@ public class PlayerMovementController : MonoBehaviour
             {
                 x = -x;
 
-                var newVelocity2D = Vector2.MoveTowards(turningPoint, targetVelocity2D, AccelerationCurve(x));
+                var newSpeed = AccelerationCurve(x);
 
-                return new Vector3(newVelocity2D.x, 0, newVelocity2D.y);
+                newVelocity2D = Vector2.MoveTowards(turningPoint, targetVelocity2D, newSpeed);
 
             } else
             {
                 // The new velocity will stay behind the turning point.
                 var newSpeed = DecelerationCurve(x);
 
-                var newVelocity2D = Vector2.MoveTowards(turningPoint, currentVelocity2D, newSpeed);
-
-                return new Vector3(newVelocity2D.x, 0, newVelocity2D.y);
+                newVelocity2D = Vector2.MoveTowards(turningPoint, currentVelocity2D, newSpeed);
             }
         } else
         {
@@ -273,13 +299,16 @@ public class PlayerMovementController : MonoBehaviour
 
             var newSpeed = AccelerationCurve(x);
 
-            var newVelocity2D = Vector2.MoveTowards(turningPoint, targetVelocity2D, newSpeed);
-
-            return new Vector3(newVelocity2D.x, 0, newVelocity2D.y);
+            newVelocity2D = Vector2.MoveTowards(turningPoint, targetVelocity2D, newSpeed);
         }
+
+        // Apply inertia to the new velocity.
+        newVelocity2D = Vector2.MoveTowards(previousVelocity2D, newVelocity2D, _maximumVelocityChange);
+
+        var newVelocity = new Vector3(newVelocity2D.x, 0, newVelocity2D.y);
+
+        return newVelocity;
     }
-
-
 
     Vector3 CalculateStoppingPosition(Vector3 position, Vector3 velocity)
     {
@@ -440,6 +469,15 @@ public class PlayerMovementController : MonoBehaviour
         }
     }
 
+    void UpdateMaximumVelocityChange()
+    {
+        if (_inertiaFactor == 0)
+            _maximumVelocityChange = Mathf.Infinity;
+        else
+        {
+            _maximumVelocityChange = 1 / _inertiaFactor * Time.fixedDeltaTime;
+        }
+    }
 
 
     // The following functions perform necessary transformations on the easing functions. These include:

@@ -71,6 +71,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ba80e452b5349884686ec4b4029cff55, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _Test: {fileID: 0}
   _TopSpeed: 5.5
   _groundLayer:
     serializedVersion: 2
@@ -78,12 +79,16 @@ MonoBehaviour:
   _obstaclesLayer:
     serializedVersion: 2
     m_Bits: 1
-  _AccelerationDuration: 0.4
+  _TimeToReachTopSpeed: 0.4
   _accelerationProfile: 1
-  _DecelerationDuration: 0.15
+  _TimeToStop: 0.15
   _decelerationProfile: 0
+  _inertiaFactor: 0.04
   _ObstacleAvoidanceEnabled: 1
-  _AvoidanceAngleThreshold: 10
+  _MinimumSurfaceAngle: 15
+  _AllowedSteeringAngle: 45
+  _AllowedAngleError: 5
+  _DetectionDistance: 0.25
 --- !u!54 &8026205018498635478
 Rigidbody:
   m_ObjectHideFlags: 0

@@ -1,3 +1,4 @@
+using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -64,6 +65,15 @@ public class UIController : MonoBehaviour
 
     EasingFunction _initialDecelerationCurve;
 
+    // - Inertia Factor
+    [SerializeField]
+    Slider _inertiaFactorSlider;
+
+    [SerializeField]
+    TextMeshProUGUI _inertiaFactorText;
+
+    float _initialInertiaFactor;
+
 
 
     // Obstacle Avoidance
@@ -123,9 +133,21 @@ public class UIController : MonoBehaviour
 
 
 
-    // Camera
+    // Camera Movement
+    [Header("Camera Movement UI Elements")]
+    [SerializeField]
+    Slider _smoothnessSlider;
+
+    [SerializeField]
+    TextMeshProUGUI _smoothnessText;
+
+    float _initialSmoothness;
+
+
+
+    // Camera Zoom
     // - Number Of Zoom Levels
-    [Header("Camera UI Elements")]
+    [Header("Camera Zoom UI Elements")]
     [SerializeField]
     Slider _nrOfZoomLevelsSlider;
 
@@ -205,6 +227,8 @@ public class UIController : MonoBehaviour
         _initialDecelerationDuration = _movementController._TimeToStop;
         _initialDecelerationCurve = _movementController.DecelerationProfile;
 
+        _initialInertiaFactor = _movementController.InertiaFactor;
+
         _initialObstacleAvoidanceEnabled = _movementController._ObstacleAvoidanceEnabled;
         _initialMinimumSurfaceAngle = _movementController._MinimumSurfaceAngle;
         _initialAllowedSteeringAngle = _movementController._AllowedSteeringAngle;
@@ -214,7 +238,10 @@ public class UIController : MonoBehaviour
         // - Animations
         _initialTurningTime = _animationController._TurningSpeed;
 
-        // - Camera
+        // - Camera movement
+        _initialSmoothness = _cameraController._MovementSmoothness;
+
+        // - Camera zoom
         _initialNrOfZoomLevels = _cameraController._NrOfZoomLevels;
 
         _initialZoomSpeed = _cameraController._ZoomSpeed;
@@ -241,6 +268,8 @@ public class UIController : MonoBehaviour
         _decelerationDurationSlider.onValueChanged.AddListener(delegate { OnDecelerationDurationSliderChange(); });
         _decelerationCurveDropdown.onValueChanged.AddListener(delegate { OnDecelerationCurveDropdownChange(); });
 
+        _inertiaFactorSlider.onValueChanged.AddListener(delegate { OnInertiaFactorSliderChange(); });
+
         _obstacleAvoidanceEnabledToggle.onValueChanged.AddListener(delegate { OnObstacleAvoidanceEnabledToggleChange(); });
         _minimumSurfaceAngleSlider.onValueChanged.AddListener(delegate { OnMinimumSurfaceAngleSliderChange(); });
         _allowedSteeringAngleSlider.onValueChanged.AddListener(delegate { OnAllowedSteeringAngleSliderChange(); });
@@ -250,7 +279,10 @@ public class UIController : MonoBehaviour
         // - Animation controls
         _turningTimeSlider.onValueChanged.AddListener(delegate { OnTurningTimeSliderChange(); });
 
-        // - Camera controls
+        // - Camera movement controls
+        _smoothnessSlider.onValueChanged.AddListener(delegate { OnSmoothnessSliderChange(); });
+
+        // - Camera zoom controls
         _nrOfZoomLevelsSlider.onValueChanged.AddListener(delegate { OnNrOfZoomLevelsSliderChange(); });
 
         _zoomSpeedSlider.onValueChanged.AddListener(delegate { OnZoomSpeedSliderChange(); });
@@ -281,6 +313,8 @@ public class UIController : MonoBehaviour
         _decelerationDurationSlider.value = _initialDecelerationDuration;
         _decelerationCurveDropdown.value = (int)_initialDecelerationCurve;
 
+        _inertiaFactorSlider.value = _initialInertiaFactor;
+
         _obstacleAvoidanceEnabledToggle.isOn = _initialObstacleAvoidanceEnabled;
         _minimumSurfaceAngleSlider.value = _initialMinimumSurfaceAngle;
 
@@ -293,7 +327,10 @@ public class UIController : MonoBehaviour
         // - Animation controls
         _turningTimeSlider.value = _initialTurningTime;
 
-        // - Camera controls
+        // - Camera movement controls
+        _smoothnessSlider.value = _initialSmoothness;
+
+        // - Camera zoom controls
         _nrOfZoomLevelsSlider.value = _initialNrOfZoomLevels;
 
         _zoomSpeedSlider.value = _initialZoomSpeed;
@@ -342,6 +379,14 @@ public class UIController : MonoBehaviour
     void OnDecelerationCurveDropdownChange()
     {
         _movementController.DecelerationProfile = (EasingFunction)_decelerationCurveDropdown.value;
+    }
+
+    private void OnInertiaFactorSliderChange()
+    {
+        var value = _inertiaFactorSlider.value;
+
+        _inertiaFactorText.text = value.ToString();
+        _movementController.InertiaFactor = value;
     }
 
     void OnObstacleAvoidanceEnabledToggleChange()
@@ -394,7 +439,18 @@ public class UIController : MonoBehaviour
 
 
 
-    // Camera controls
+    // Camera movement controls
+    private void OnSmoothnessSliderChange()
+    {
+        var value = _smoothnessSlider.value;
+
+        _smoothnessText.text = value.ToString();
+        _cameraController._MovementSmoothness = value;
+    }
+
+
+
+    // Camera zoom controls
     void OnNrOfZoomLevelsSliderChange()
     {
         var value = _nrOfZoomLevelsSlider.value;
